@@ -1,101 +1,143 @@
-<?php 
-  session_start();
+<?php  
 
-  if (!isset($_SESSION['username'])) {
-?>
+# check if username, password, name submitted
+if(isset($_POST['username']) &&
+   isset($_POST['password']) &&
+   isset($_POST['name'])){
 
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>MALI_MESSAGE Gratuit - inscription</title>
-	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
-	<link rel="stylesheet" 
-	      href="css/style.css">
-	<link rel="icon" href="img/logo.png">
-</head>
-<body class="d-flex
-             justify-content-center
-             align-items-center
-             vh-100">
-	 <div class="w-400 p-5 shadow rounded">
-	 	<form method="post" 
-	 	      action="app/http/signup.php"
-	 	      enctype="multipart/form-data">
-	 		<div class="d-flex
-	 		            justify-content-center
-	 		            align-items-center
-	 		            flex-column">
+   # database connection file
+   include '../db.conn.php';
+   
+   # get data from POST request and store them in var
+   $name = $_POST['name'];
+   $password = $_POST['password'];
+   $username = $_POST['username'];
 
-	 		<img src="img/logo.png" 
-	 		     class="w-25">
-	 		<h3 class="display-4 fs-1 
-	 		           text-center">
-	 			       inscription</h3>   
-	 		</div>
+   # making URL data format
+   $data = 'name='.$name.'&username='.$username;
 
-	 		<?php if (isset($_GET['error'])) { ?>
-	 		<div class="alert alert-warning" role="alert">
-			  <?php echo htmlspecialchars($_GET['error']);?>
-			</div>
-			<?php } 
-              
-              if (isset($_GET['name'])) {
-              	$name = $_GET['name'];
-              }else $name = '';
+   #simple form Validation
+   if (empty($name)) {
+   	  # error message
+   	  $em = "Nom est nécessaire";
 
-              if (isset($_GET['username'])) {
-              	$username = $_GET['username'];
-              }else $username = '';
-			?>
+   	  # redirect to 'signup.php' and passing error message
+   	  header("Location: ../../signup.php?error=$em");
+   	  exit;
+   }else if(empty($username)){
+      # error message
+   	  $em = "Nom d'utilisateur est nécessaire";
 
-	 	  <div class="mb-3">
-		    <label class="form-label">
-		           Nom</label>
-		    <input type="text"
-		           name="name"
-		           value="<?=$name?>" 
-		           class="form-control">
-		  </div>
+   	  /*
+    	redirect to 'signup.php' and 
+    	passing error message and data
+      */
+   	  header("Location: ../../signup.php?error=$em&$data");
+   	  exit;
+   }else if(empty($password)){
+   	  # error message
+   	  $em = "Mot de passe requis";
 
-		  <div class="mb-3">
-		    <label class="form-label">
-		           Nom d'utilisateur</label>
-		    <input type="text" 
-		           class="form-control"
-		           value="<?=$username?>" 
-		           name="username">
-		  </div>
+   	  /*
+    	redirect to 'signup.php' and 
+    	passing error message and data
+      */
+   	  header("Location: ../../signup.php?error=$em&$data");
+   	  exit;
+   }else {
+   	  # checking the database if the username is taken
+   	  $sql = "SELECT username 
+   	          FROM users
+   	          WHERE username=?";
+      $stmt = $conn->prepare($sql);
+      $stmt->execute([$username]);
 
+      if($stmt->rowCount() > 0){
+      	$em = "l'identifiant ($username) est pris";
+      	header("Location: ../../signup.php?error=$em&$data");
+   	    exit;
+      }else {
+      	# Profile Picture Uploading
+      	if (isset($_FILES['pp'])) {
+      		# get data and store them in var
+      		$img_name  = $_FILES['pp']['name'];
+      		$tmp_name  = $_FILES['pp']['tmp_name'];
+      		$error  = $_FILES['pp']['error'];
 
-		  <div class="mb-3">
-		    <label class="form-label">
-		           Mot de passe</label>
-		    <input type="password" 
-		           class="form-control"
-		           name="password">
-		  </div>
+      		# if there is not error occurred while uploading
+      		if($error === 0){
+               
+               # get image extension store it in var
+      		   $img_ex = pathinfo($img_name, PATHINFO_EXTENSION);
 
-		  <div class="mb-3">
-		    <label class="form-label">
-		           Photo de Profile</label>
-		    <input type="file" 
-		           class="form-control"
-		           name="pp">
-		  </div>
-		  
-		  <button type="submit" 
-		          class="btn btn-primary">
-		          S'INSCRIRE</button>
-		  <a href="index.php">Se connecter</a>
-		</form>
-	 </div>
-</body>
-</html>
-<?php
-  }else{
-  	header("Location: home.php");
+               /** 
+				convert the image extension into lower case 
+				and store it in var 
+				**/
+				$img_ex_lc = strtolower($img_ex);
+
+				/** 
+				crating array that stores allowed
+				to upload image extension.
+				**/
+				$allowed_exs = array("jpg", "jpeg", "png");
+
+				/** 
+				check if the the image extension 
+				is present in $allowed_exs array
+				**/
+				if (in_array($img_ex_lc, $allowed_exs)) {
+					/** 
+					 renaming the image with user's username
+					 like: username.$img_ex_lc
+					**/
+					$new_img_name = $username. '.'.$img_ex_lc;
+
+					# crating upload path on root directory
+					$img_upload_path = '../../uploads/'.$new_img_name;
+
+					# move uploaded image to ./upload folder
+                    move_uploaded_file($tmp_name, $img_upload_path);
+				}else {
+					$em = "Vous ne pouvez pas télécharger de fichiers de ce type";
+			      	header("Location: ../../signup.php?error=$em&$data");
+			   	    exit;
+				}
+
+      		}
+      	}
+
+      	// password hashing
+      	$password = password_hash($password, PASSWORD_DEFAULT);
+
+      	# if the user upload Profile Picture
+      	if (isset($new_img_name)) {
+
+      		# inserting data into database
+            $sql = "INSERT INTO users
+                    (name, username, password, p_p)
+                    VALUES (?,?,?,?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([$name, $username, $password, $new_img_name]);
+      	}else {
+            # inserting data into database
+            $sql = "INSERT INTO users
+                    (name, username, password)
+                    VALUES (?,?,?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([$name, $username, $password]);
+      	}
+
+      	# success message
+      	$sm = "Compte créé avec succès";
+
+      	# redirect to 'index.php' and passing success message
+      	header("Location: ../../index.php?success=$sm");
+     	exit;
+      }
+
+   }
+}else {
+	header("Location: ../../signup.php");
    	exit;
-  }
- ?>
+}
